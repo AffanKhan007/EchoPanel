@@ -1,0 +1,24 @@
+[
+  {
+    "id": "alt_001",
+    "severity": "high",
+    "title": "Support backlog crossed the alert threshold",
+    "body": "The support queue in North America is 18% above target after a spike in weekend escalations.",
+    "timeAgo": "6 min ago"
+  },
+  {
+    "id": "alt_002",
+    "severity": "medium",
+    "title": "Finance automation rollout is ahead of schedule",
+    "body": "Billing reconciliation automation moved from pilot to general availability two days earlier than expected.",
+    "timeAgo": "19 min ago"
+  },
+  {
+    "id": "alt_003",
+    "severity": "low",
+    "title": "Operations routing refresh needs owner confirmation",
+    "body": "The EMEA routing package is ready for final review, pending sign-off from the warehouse systems owner.",
+    "timeAgo": "43 min ago"
+  }
+]
+

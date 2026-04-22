@@ -1,0 +1,31 @@
+[
+  {
+    "id": "active",
+    "label": "Active workstreams",
+    "value": "24",
+    "delta": "+8% week over week",
+    "direction": "up"
+  },
+  {
+    "id": "sla",
+    "label": "SLA coverage",
+    "value": "97.8%",
+    "delta": "+1.2 pts",
+    "direction": "up"
+  },
+  {
+    "id": "risk",
+    "label": "Items at risk",
+    "value": "4",
+    "delta": "-2 since Monday",
+    "direction": "down"
+  },
+  {
+    "id": "health",
+    "label": "Portfolio health",
+    "value": "Strong",
+    "delta": "steady over 3 days",
+    "direction": "steady"
+  }
+]
+

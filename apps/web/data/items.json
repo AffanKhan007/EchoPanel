@@ -1,0 +1,75 @@
+[
+  {
+    "id": "itm_001",
+    "name": "Billing reconciliation bot",
+    "category": "Finance",
+    "status": "Live",
+    "owner": "Nadia",
+    "region": "North America",
+    "score": 91
+  },
+  {
+    "id": "itm_002",
+    "name": "Warehouse routing refresh",
+    "category": "Operations",
+    "status": "Building",
+    "owner": "Owen",
+    "region": "EMEA",
+    "score": 76
+  },
+  {
+    "id": "itm_003",
+    "name": "Self-serve onboarding",
+    "category": "Growth",
+    "status": "Live",
+    "owner": "Priya",
+    "region": "APAC",
+    "score": 88
+  },
+  {
+    "id": "itm_004",
+    "name": "Priority support triage",
+    "category": "Support",
+    "status": "Blocked",
+    "owner": "Mateo",
+    "region": "North America",
+    "score": 54
+  },
+  {
+    "id": "itm_005",
+    "name": "Collections outreach rules",
+    "category": "Finance",
+    "status": "Building",
+    "owner": "Hana",
+    "region": "EMEA",
+    "score": 69
+  },
+  {
+    "id": "itm_006",
+    "name": "Inventory discrepancy audit",
+    "category": "Operations",
+    "status": "Live",
+    "owner": "Jules",
+    "region": "LATAM",
+    "score": 93
+  },
+  {
+    "id": "itm_007",
+    "name": "Referral campaign launcher",
+    "category": "Growth",
+    "status": "Building",
+    "owner": "Avery",
+    "region": "North America",
+    "score": 74
+  },
+  {
+    "id": "itm_008",
+    "name": "Escalation resolution cockpit",
+    "category": "Support",
+    "status": "Live",
+    "owner": "Lina",
+    "region": "EMEA",
+    "score": 86
+  }
+]
+
