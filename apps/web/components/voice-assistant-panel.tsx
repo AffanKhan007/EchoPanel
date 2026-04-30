@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useState } from "react";
 import type { TranscriptEntry } from "@/lib/types";
 
-type VoiceCopilotPanelProps = {
+type VoiceAssistantPanelProps = {
   agentIdentity: string | null;
   agentState: string;
   connectionState: string;
-  highlightedWidget: string | null;
   isMuted: boolean;
   isPrepared: boolean;
   isWorking: boolean;
@@ -17,14 +17,15 @@ type VoiceCopilotPanelProps = {
   onPause: () => void;
   onEndSession: () => void;
   onToggleMute: () => void;
+  onSubmitTextQuestion: (question: string) => Promise<void>;
+  isSubmittingText: boolean;
   transcript: TranscriptEntry[];
 };
 
-export function VoiceCopilotPanel({
+export function VoiceAssistantPanel({
   agentIdentity,
   agentState,
   connectionState,
-  highlightedWidget,
   isMuted,
   isPrepared,
   isWorking,
@@ -34,9 +35,12 @@ export function VoiceCopilotPanel({
   onPause,
   onEndSession,
   onToggleMute,
+  onSubmitTextQuestion,
+  isSubmittingText,
   transcript,
-}: VoiceCopilotPanelProps) {
+}: VoiceAssistantPanelProps) {
   const transcriptRef = useRef<HTMLDivElement | null>(null);
+  const [draftQuestion, setDraftQuestion] = useState("");
 
   useEffect(() => {
     const node = transcriptRef.current;
@@ -53,7 +57,7 @@ export function VoiceCopilotPanel({
   const subtitle = !isPrepared
     ? "Preparing the voice session in the background..."
     : !sessionActive
-      ? "Press Start Session when you're ready. The assistant will greet first."
+      ? "Press Start Session when you're ready. You can then speak or type a question."
       : uiStage === "Listening"
         ? "Go ahead, I'm listening."
         : uiStage === "Finalizing"
@@ -78,10 +82,7 @@ export function VoiceCopilotPanel({
           </header>
 
           <div className="assistant-hero">
-            <div
-              className="highlightable"
-              data-highlighted={highlightedWidget === "assistant-orb"}
-            >
+            <div className="highlightable">
               <div className={`assistant-orb ${sessionActive ? "live" : ""}`} />
             </div>
 
@@ -91,10 +92,7 @@ export function VoiceCopilotPanel({
             </div>
           </div>
 
-          <div
-            className="assistant-status-row highlightable"
-            data-highlighted={highlightedWidget === "status-indicator"}
-          >
+          <div className="assistant-status-row highlightable">
             <span className="assistant-pill">Stage: {uiStage}</span>
             <span className="assistant-pill">Connection: {connectionState}</span>
             <span className="assistant-pill">Agent: {agentState}</span>
@@ -103,10 +101,7 @@ export function VoiceCopilotPanel({
             </span>
           </div>
 
-          <div
-            className="assistant-controls highlightable"
-            data-highlighted={highlightedWidget === "voice-controls"}
-          >
+          <div className="assistant-controls highlightable">
             <button
               className="assistant-button assistant-button-primary"
               onClick={onConnect}
@@ -137,15 +132,46 @@ export function VoiceCopilotPanel({
             </button>
           </div>
 
-          <div className="assistant-tool-hints">
-            <div className="assistant-tool-hints-title">Try App-Aware Questions</div>
-            <div className="assistant-tool-hints-list">
-              <span className="assistant-tool-chip">What&apos;s on this page?</span>
-              <span className="assistant-tool-chip">Summarize the mock data</span>
-              <span className="assistant-tool-chip">Show me blocked items</span>
-              <span className="assistant-tool-chip">Highlight the transcript area</span>
+          <form
+            className="assistant-text-form highlightable"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              const nextQuestion = draftQuestion.trim();
+              if (!nextQuestion) {
+                return;
+              }
+
+              await onSubmitTextQuestion(nextQuestion);
+              setDraftQuestion("");
+            }}
+          >
+            <label className="assistant-text-label" htmlFor="assistant-text-question">
+              Type a question
+            </label>
+            <div className="assistant-text-row">
+              <input
+                id="assistant-text-question"
+                className="assistant-text-input"
+                type="text"
+                placeholder="Type your question here"
+                value={draftQuestion}
+                onChange={(event) => setDraftQuestion(event.target.value)}
+                disabled={!sessionActive || isWorking || isSubmittingText}
+              />
+              <button
+                className="assistant-button assistant-button-primary"
+                type="submit"
+                disabled={
+                  !sessionActive ||
+                  isWorking ||
+                  isSubmittingText ||
+                  draftQuestion.trim().length === 0
+                }
+              >
+                {isSubmittingText ? "Sending..." : "Send"}
+              </button>
             </div>
-          </div>
+          </form>
         </div>
 
         <aside className="assistant-transcript-panel">
@@ -157,7 +183,6 @@ export function VoiceCopilotPanel({
           <div
             ref={transcriptRef}
             className="assistant-transcript highlightable"
-            data-highlighted={highlightedWidget === "live-transcript"}
           >
             {transcript.length === 0 ? (
               <div className="assistant-empty">

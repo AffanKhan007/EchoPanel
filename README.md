@@ -1,6 +1,6 @@
 # EchoPanel Voice Agent Demo
 
-Browser-only voice copilot demo built with Next.js on the frontend and a Python LiveKit Agent on the backend. The browser joins a LiveKit room only after the user clicks connect, publishes microphone audio, receives the agent's audio response, renders synchronized transcripts, and exposes safe frontend tools over LiveKit RPC.
+Browser-based real-time voice assistant built with Next.js on the frontend and a Python LiveKit agent on the backend. The browser joins a LiveKit room, streams microphone audio, receives spoken responses from the assistant, and shows a synchronized live transcript for both sides.
 
 ## What this demo does
 
@@ -10,12 +10,9 @@ Browser-only voice copilot demo built with Next.js on the frontend and a Python 
   - `openai/gpt-5-nano`
   - Deepgram Flux STT with `flux-general-en`
   - Cartesia Sonic 3 TTS with voice `9626c31c-bec5-4cca-baa8-f8ba9e84c8bc`
-- Uses Silero VAD plus the LiveKit turn detector for quicker but smarter turn-taking.
-- Enables preemptive generation so the agent can start responding earlier when the transcript is ready.
-- Lets the agent:
-  - explain the current page from frontend context
-  - answer questions from local mock JSON data
-  - apply safe UI actions through forwarded frontend tools
+- Uses Silero VAD for turn-taking and interruptions.
+- Keeps the interaction voice-first and general-purpose.
+- Shows live transcript for both user and assistant speech.
 
 ## Project structure
 
@@ -24,17 +21,14 @@ project-root/
   apps/
     web/
       app/
+        api/livekit-token/
       components/
       lib/
-      public/
-      data/
       package.json
     agent/
       src/
         agent.py
-        tools.py
         prompts.py
-        mock_data.py
       requirements.txt
   .env.example
   README.md
@@ -99,8 +93,8 @@ npm install
 
 ```bash
 cd apps/agent
-python -m venv .venv
-.venv\Scripts\activate
+python -m venv .venv312
+.venv312\Scripts\activate
 pip install -r requirements.txt
 python src/agent.py download-files
 ```
@@ -122,8 +116,8 @@ In a second terminal:
 
 ```bash
 cd apps/agent
-.venv\Scripts\activate
-python src/agent.py dev
+.venv312\Scripts\activate
+python src/agent.py start
 ```
 
 The agent registers under the explicit dispatch name `echo-browser-copilot`.
@@ -146,7 +140,7 @@ The browser uses `NEXT_PUBLIC_LIVEKIT_URL` or the returned `wsUrl` to connect. T
 
 ## How the frontend connects to the agent
 
-1. User clicks `Connect`.
+1. User clicks `Start Session`.
 2. The web app calls `/api/livekit-token`.
 3. The browser connects to LiveKit with the returned token.
 4. The browser publishes the microphone track.
@@ -155,28 +149,7 @@ The browser uses `NEXT_PUBLIC_LIVEKIT_URL` or the returned `wsUrl` to connect. T
    - connection state
    - agent state from `lk.agent.state`
    - synchronized transcriptions
-   - recent forwarded tool actions
-
-## Frontend tools exposed to the agent
-
-The frontend registers these LiveKit RPC handlers:
-
-- `getCurrentPageContext`
-- `applyFilter`
-- `openPanel`
-- `highlightWidget`
-
-They let the agent inspect current UI state and perform safe, reversible interface actions.
-
-## Backend tools exposed to the model
-
-The Python agent exposes:
-
-- `query_data(question_or_filter)`
-- `get_items()`
-- `summarize_page_data()`
-
-These load local mock JSON from `apps/web/data`.
+   - session controls
 
 ## Manual LiveKit Cloud setup steps
 
@@ -194,5 +167,5 @@ No extra OpenAI, Deepgram, or Cartesia keys are required here because the agent 
 ## Notes
 
 - This repo intentionally does not hardcode real credentials in source control.
-- The agent reads structured frontend context, not raw pixels. For a portfolio demo, that still gives a strong "understands the current screen" experience with lower complexity.
-- The design keeps UI actions safe: filters, panel open, and temporary highlighting only.
+- The current structure is intentionally simple: one frontend app and one backend agent.
+- The assistant is a general voice assistant now, not a tool-using app copilot.

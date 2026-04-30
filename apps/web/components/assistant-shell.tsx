@@ -7,21 +7,13 @@ import {
   RemoteParticipant,
   Room,
   RoomEvent,
-  RpcError,
   Track,
-  type RpcInvocationData,
   type TrackPublication,
 } from "livekit-client";
 import { requestLiveKitToken } from "@/lib/livekit";
-import type { FilterState, PageContextPayload, TranscriptEntry } from "@/lib/types";
-import { VoiceCopilotPanel } from "@/components/voice-copilot-panel";
+import type { TranscriptEntry } from "@/lib/types";
+import { VoiceAssistantPanel } from "@/components/voice-assistant-panel";
 
-type UiSnapshot = {
-  filters: FilterState;
-  contextLabel: string | null;
-};
-
-const FILTERABLE_FIELDS = new Set(["category", "status", "search"]);
 const AUDIO_CAPTURE_OPTIONS = {
   autoGainControl: true,
   echoCancellation: true,
@@ -41,13 +33,7 @@ function describeConnectionState(state: ConnectionState | string) {
   return "disconnected";
 }
 
-export function DemoShell() {
-  const [filters, setFilters] = useState<FilterState>({
-    category: "All",
-    status: "All",
-    search: "",
-  });
-  const [highlightedWidget, setHighlightedWidget] = useState<string | null>(null);
+export function AssistantShell() {
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [connectionState, setConnectionState] = useState("disconnected");
   const [agentState, setAgentState] = useState("waiting");
@@ -55,8 +41,8 @@ export function DemoShell() {
   const [isMuted, setIsMuted] = useState(true);
   const [isPrepared, setIsPrepared] = useState(false);
   const [isWorking, setIsWorking] = useState(false);
+  const [isSubmittingText, setIsSubmittingText] = useState(false);
   const [sessionActive, setSessionActive] = useState(false);
-  const [contextLabel, setContextLabel] = useState<string | null>(null);
 
   const roomRef = useRef<Room | null>(null);
   const agentIdentityRef = useRef<string | null>(null);
@@ -65,33 +51,10 @@ export function DemoShell() {
   const prepareStartedRef = useRef(false);
   const transcriptCreatedAtRef = useRef<Record<string, number>>({});
   const sessionActiveRef = useRef(false);
-  const uiRef = useRef<UiSnapshot>({
-    filters,
-    contextLabel,
-  });
-
-  useEffect(() => {
-    uiRef.current = {
-      filters,
-      contextLabel,
-    };
-  }, [filters, contextLabel]);
 
   useEffect(() => {
     sessionActiveRef.current = sessionActive;
   }, [sessionActive]);
-
-  useEffect(() => {
-    if (!highlightedWidget) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      setHighlightedWidget((current) => (current === highlightedWidget ? null : current));
-    }, 1800);
-
-    return () => window.clearTimeout(timeout);
-  }, [highlightedWidget]);
 
   useEffect(() => {
     if (prepareStartedRef.current) {
@@ -142,21 +105,6 @@ export function DemoShell() {
     return "Starting";
   }
 
-  function buildPageContext(): PageContextPayload {
-    return {
-      route: "/",
-      pageTitle: "AI Assistant",
-      visibleWidgets: [
-        "assistant-orb",
-        "live-transcript",
-        "status-indicator",
-        "voice-controls",
-      ],
-      activeFilters: uiRef.current.filters,
-      selectedEntity: uiRef.current.contextLabel,
-    };
-  }
-
   function upsertTranscriptEntry(
     participantIdentity: string,
     segmentId: string,
@@ -194,6 +142,22 @@ export function DemoShell() {
         .sort((left, right) => left.createdAt - right.createdAt)
         .slice(-30);
     });
+  }
+
+  function appendTranscriptEntry(
+    role: TranscriptEntry["role"],
+    speaker: string,
+    text: string,
+  ) {
+    const id = crypto.randomUUID();
+    const createdAt = Date.now();
+
+    setTranscript((current) =>
+      [...current, { id, role, speaker, text, isFinal: true, createdAt }]
+        .filter((entry) => entry.text.trim().length > 0)
+        .sort((left, right) => left.createdAt - right.createdAt)
+        .slice(-30),
+    );
   }
 
   function deriveAgentState(participant?: Participant | RemoteParticipant | null) {
@@ -280,112 +244,7 @@ export function DemoShell() {
     setIsMuted(true);
     setIsPrepared(false);
     setSessionActive(false);
-    setContextLabel(null);
     setTranscript([]);
-  }
-
-  function registerRpcHandlers(room: Room) {
-    room.registerRpcMethod("getCurrentPageContext", async () => {
-      return JSON.stringify(buildPageContext());
-    });
-
-    room.registerRpcMethod("applyFilter", async (data: RpcInvocationData) => {
-      try {
-        const payload = JSON.parse(data.payload) as {
-          field?: string;
-          op?: string;
-          value?: string;
-        };
-
-        const field = payload.field?.trim() ?? "";
-        if (!FILTERABLE_FIELDS.has(field)) {
-          throw new RpcError(1500, `Unsupported filter field: ${field}`);
-        }
-
-        const nextValue = String(payload.value ?? "").trim();
-        const nextFilters: FilterState = {
-          ...uiRef.current.filters,
-          [field]:
-            field === "search"
-              ? nextValue
-              : nextValue.length === 0
-                ? "All"
-                : nextValue,
-        } as FilterState;
-
-        setFilters(nextFilters);
-        setContextLabel(nextValue ? `${field}: ${nextValue}` : null);
-
-        return JSON.stringify({
-          success: true,
-          activeFilters: nextFilters,
-        });
-      } catch (error) {
-        if (error instanceof RpcError) {
-          throw error;
-        }
-        throw new RpcError(1500, "Could not apply filter.");
-      }
-    });
-
-    room.registerRpcMethod("openPanel", async (data: RpcInvocationData) => {
-      try {
-        const payload = JSON.parse(data.payload) as { panel?: string };
-        const panel = payload.panel ?? "transcript";
-        const widgetMap: Record<string, string> = {
-          details: "live-transcript",
-          alerts: "status-indicator",
-          insights: "assistant-orb",
-          transcript: "live-transcript",
-          status: "status-indicator",
-          orb: "assistant-orb",
-        };
-        const target = widgetMap[panel];
-
-        if (!target) {
-          throw new RpcError(1500, "Unsupported panel requested.");
-        }
-
-        setHighlightedWidget(target);
-
-        return JSON.stringify({
-          success: true,
-          panel,
-        });
-      } catch (error) {
-        if (error instanceof RpcError) {
-          throw error;
-        }
-        throw new RpcError(1500, "Could not open the requested panel.");
-      }
-    });
-
-    room.registerRpcMethod("highlightWidget", async (data: RpcInvocationData) => {
-      try {
-        const payload = JSON.parse(data.payload) as { widgetId?: string };
-        const widgetId = payload.widgetId ?? "";
-
-        if (
-          !["assistant-orb", "live-transcript", "status-indicator", "voice-controls"].includes(
-            widgetId,
-          )
-        ) {
-          throw new RpcError(1500, "Unsupported widget requested.");
-        }
-
-        setHighlightedWidget(widgetId);
-
-        return JSON.stringify({
-          success: true,
-          widgetId,
-        });
-      } catch (error) {
-        if (error instanceof RpcError) {
-          throw error;
-        }
-        throw new RpcError(1500, "Could not highlight the requested widget.");
-      }
-    });
   }
 
   function attachRoomHandlers(room: Room) {
@@ -511,7 +370,6 @@ export function DemoShell() {
     });
 
     roomRef.current = room;
-    registerRpcHandlers(room);
     attachRoomHandlers(room);
 
     await room.connect(
@@ -643,13 +501,37 @@ export function DemoShell() {
     setIsMuted(nextMuted);
   }
 
+  async function handleSubmitTextQuestion(question: string) {
+    const room = roomRef.current;
+    if (!room || !sessionActive) {
+      return;
+    }
+
+    const trimmedQuestion = question.trim();
+    if (!trimmedQuestion) {
+      return;
+    }
+
+    setIsSubmittingText(true);
+
+    try {
+      await room.startAudio();
+      setRemoteAudioEnabled(true);
+      await room.localParticipant.sendText(trimmedQuestion, {
+        topic: "lk.chat",
+      });
+      appendTranscriptEntry("user", "You", trimmedQuestion);
+    } finally {
+      setIsSubmittingText(false);
+    }
+  }
+
   return (
     <div className="assistant-page">
-      <VoiceCopilotPanel
+      <VoiceAssistantPanel
         agentIdentity={agentIdentity}
         agentState={agentState}
         connectionState={connectionState}
-        highlightedWidget={highlightedWidget}
         isMuted={isMuted}
         isPrepared={isPrepared}
         isWorking={isWorking}
@@ -659,6 +541,8 @@ export function DemoShell() {
         onPause={handlePause}
         onEndSession={handleEndSession}
         onToggleMute={handleToggleMute}
+        onSubmitTextQuestion={handleSubmitTextQuestion}
+        isSubmittingText={isSubmittingText}
         transcript={transcript}
       />
 

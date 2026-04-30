@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import time
+from typing import Any
 
 from dotenv import load_dotenv
 from livekit.agents import (
@@ -11,23 +14,21 @@ from livekit.agents import (
     EndpointingOptions,
     JobContext,
     JobProcess,
-    RunContext,
-    ToolError,
     TurnHandlingOptions,
     cli,
-    function_tool,
     inference,
+    llm,
 )
 from livekit.plugins import silero
 
 from prompts import SYSTEM_PROMPT
-from tools import call_frontend_rpc, get_items_data, query_items, summarize_page_data_payload
 
 
 load_dotenv()
 
 AGENT_NAME = "echo-browser-copilot"
 VOICE_ID = "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc"
+latency_logger = logging.getLogger("echo.latency")
 
 server = AgentServer(
     load_threshold=0.95,
@@ -36,88 +37,51 @@ server = AgentServer(
 
 
 def prewarm(proc: JobProcess) -> None:
-    proc.userdata["vad"] = silero.VAD.load()
+    proc.userdata["vad"] = silero.VAD.load(activation_threshold=0.3)
 
 
 server.setup_fnc = prewarm
 
 
+def _format_ms(value: Any) -> str | None:
+    if not isinstance(value, (int, float)):
+        return None
+    return f"{value * 1000:.0f}ms"
+
+
+def _metrics_summary(metrics: dict[str, Any] | None, keys: list[str]) -> str:
+    if not metrics:
+        return "n/a"
+
+    parts: list[str] = []
+    for key in keys:
+        value = _format_ms(metrics.get(key))
+        if value is not None:
+            parts.append(f"{key}={value}")
+
+    return ", ".join(parts) if parts else "n/a"
+
+
+def _interrupt_pending_reply(session: AgentSession) -> None:
+    def _drain_interrupt_result(pending: asyncio.Future[Any]) -> None:
+        try:
+            pending.exception()
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            latency_logger.exception("interrupt future failed")
+
+    try:
+        pending = session.interrupt(force=True)
+        if isinstance(pending, asyncio.Future):
+            pending.add_done_callback(_drain_interrupt_result)
+    except Exception:
+        latency_logger.exception("failed to interrupt pending reply")
+
+
 class EchoBrowserAgent(Agent):
     def __init__(self) -> None:
         super().__init__(instructions=SYSTEM_PROMPT)
-
-    @function_tool(name="query_data")
-    async def query_data(
-        self,
-        context: RunContext,
-        question_or_filter: str,
-    ) -> dict:
-        """Query local mock data using a natural-language question or simple filter phrase."""
-        if not question_or_filter.strip():
-            raise ToolError("Please provide a question or filter.")
-        return query_items(question_or_filter)
-
-    @function_tool(name="get_items")
-    async def get_items(
-        self,
-        context: RunContext,
-    ) -> list[dict]:
-        """Return the current mock item collection shown in the demo."""
-        return get_items_data()
-
-    @function_tool(name="summarize_page_data")
-    async def summarize_page_data(
-        self,
-        context: RunContext,
-    ) -> dict:
-        """Summarize the dashboard's mock data, status counts, and top alerts."""
-        return summarize_page_data_payload()
-
-    @function_tool(name="getCurrentPageContext")
-    async def get_current_page_context(
-        self,
-        context: RunContext,
-    ) -> dict:
-        """Get structured frontend context about the currently visible page."""
-        return await call_frontend_rpc("getCurrentPageContext")
-
-    @function_tool(name="applyFilter")
-    async def apply_filter(
-        self,
-        context: RunContext,
-        field: str,
-        op: str,
-        value: str,
-    ) -> dict:
-        """Apply a safe UI filter on the frontend.
-
-        Args:
-            field: One of category, status, or search.
-            op: The comparison operator requested by the user. Usually eq or contains.
-            value: The filter value to apply.
-        """
-        return await call_frontend_rpc(
-            "applyFilter",
-            {"field": field, "op": op, "value": value},
-        )
-
-    @function_tool(name="openPanel")
-    async def open_panel(
-        self,
-        context: RunContext,
-        panel: str,
-    ) -> dict:
-        """Open a named side panel on the frontend. Use details, alerts, or insights."""
-        return await call_frontend_rpc("openPanel", {"panel": panel})
-
-    @function_tool(name="highlightWidget")
-    async def highlight_widget(
-        self,
-        context: RunContext,
-        widgetId: str,
-    ) -> dict:
-        """Temporarily highlight a widget on the frontend by widget id."""
-        return await call_frontend_rpc("highlightWidget", {"widgetId": widgetId})
 
 
 @server.rtc_session(agent_name=AGENT_NAME)
@@ -129,8 +93,13 @@ async def entrypoint(ctx: JobContext) -> None:
     session = AgentSession(
         vad=vad,
         stt=inference.STT(
-            model="deepgram/flux-general",
+            model="assemblyai/u3-rt-pro",
             language="en",
+            extra_kwargs={
+                "min_turn_silence": 100,
+                "max_turn_silence": 1000,
+                "vad_threshold": 0.3,
+            },
         ),
         llm=inference.LLM(model="openai/gpt-5-nano"),
         tts=inference.TTS(
@@ -143,21 +112,115 @@ async def entrypoint(ctx: JobContext) -> None:
             },
         ),
         turn_handling=TurnHandlingOptions(
-            turn_detection="vad",
+            turn_detection="stt",
             endpointing=EndpointingOptions(
                 mode="fixed",
-                min_delay=0.1,
-                max_delay=0.28,
+                min_delay=0.0,
+                max_delay=0.1,
             ),
             preemptive_generation={
-                "enabled": True,
+                "enabled": False,
                 "preemptive_tts": True,
                 "max_speech_duration": 6.0,
                 "max_retries": 1,
             },
         ),
-        max_tool_steps=4,
     )
+
+    turn_probe: dict[str, Any] = {
+        "id": 0,
+        "final_transcript_at": None,
+        "transcript": "",
+        "active_reply_turn": None,
+    }
+
+    @session.on("user_input_transcribed")
+    def _on_user_input_transcribed(event: Any) -> None:
+        if not event.is_final:
+            return
+
+        previous_reply_turn = turn_probe.get("active_reply_turn")
+        turn_probe["id"] += 1
+        turn_probe["final_transcript_at"] = time.perf_counter()
+        turn_probe["transcript"] = event.transcript.strip()
+        latency_logger.info(
+            "turn %s final transcript captured: %s",
+            turn_probe["id"],
+            turn_probe["transcript"] or "<empty>",
+        )
+
+        if previous_reply_turn is not None:
+            latency_logger.info(
+                "turn %s interrupting pending reply from turn %s",
+                turn_probe["id"],
+                previous_reply_turn,
+            )
+            turn_probe["active_reply_turn"] = None
+            _interrupt_pending_reply(session)
+
+    @session.on("speech_created")
+    def _on_speech_created(event: Any) -> None:
+        started_at = turn_probe.get("final_transcript_at")
+        if started_at is None:
+            return
+
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+        latency_logger.info(
+            "turn %s speech handle created after %sms (source=%s)",
+            turn_probe["id"],
+            elapsed_ms,
+            event.source,
+        )
+
+    @session.on("agent_state_changed")
+    def _on_agent_state_changed(event: Any) -> None:
+        started_at = turn_probe.get("final_transcript_at")
+        if started_at is None:
+            return
+
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+        if event.new_state == "thinking":
+            turn_probe["active_reply_turn"] = turn_probe["id"]
+            latency_logger.info(
+                "turn %s agent entered thinking after %sms",
+                turn_probe["id"],
+                elapsed_ms,
+            )
+        elif event.new_state == "speaking":
+            turn_probe["active_reply_turn"] = turn_probe["id"]
+            latency_logger.info(
+                "turn %s agent started speaking after %sms",
+                turn_probe["id"],
+                elapsed_ms,
+            )
+
+    @session.on("conversation_item_added")
+    def _on_conversation_item_added(event: Any) -> None:
+        if not isinstance(event.item, llm.ChatMessage):
+            return
+
+        if event.item.role == "user":
+            latency_logger.info(
+                "turn %s user metrics: %s",
+                turn_probe["id"],
+                _metrics_summary(
+                    event.item.metrics,
+                    ["end_of_turn_delay", "on_user_turn_completed_delay"],
+                ),
+            )
+            return
+
+        if event.item.role == "assistant":
+            latency_logger.info(
+                "turn %s assistant metrics: %s",
+                turn_probe["id"],
+                _metrics_summary(
+                    event.item.metrics,
+                    ["llm_node_ttft", "tts_node_ttfb", "e2e_latency"],
+                ),
+            )
+            turn_probe["final_transcript_at"] = None
+            turn_probe["active_reply_turn"] = None
 
     await session.start(
         room=ctx.room,

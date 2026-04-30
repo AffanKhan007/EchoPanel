@@ -225,6 +225,43 @@ p {
   gap: 12px;
 }
 
+.assistant-text-form {
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.assistant-text-label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.assistant-text-row {
+  display: flex;
+  gap: 10px;
+}
+
+.assistant-text-input {
+  flex: 1;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #121212;
+  color: var(--text);
+}
+
+.assistant-text-input::placeholder {
+  color: var(--muted);
+}
+
 .assistant-tool-hints {
   margin-top: 18px;
   padding: 14px;

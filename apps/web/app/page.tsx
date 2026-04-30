@@ -1,6 +1,5 @@
-import { DemoShell } from "@/components/demo-shell";
+import { AssistantShell } from "@/components/assistant-shell";
 
 export default function HomePage() {
-  return <DemoShell />;
+  return <AssistantShell />;
 }
-
