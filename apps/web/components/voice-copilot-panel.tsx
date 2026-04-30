@@ -14,7 +14,8 @@ type VoiceCopilotPanelProps = {
   sessionActive: boolean;
   uiStage: string;
   onConnect: () => void;
-  onDisconnect: () => void;
+  onPause: () => void;
+  onEndSession: () => void;
   onToggleMute: () => void;
   transcript: TranscriptEntry[];
 };
@@ -30,7 +31,8 @@ export function VoiceCopilotPanel({
   sessionActive,
   uiStage,
   onConnect,
-  onDisconnect,
+  onPause,
+  onEndSession,
   onToggleMute,
   transcript,
 }: VoiceCopilotPanelProps) {
@@ -108,7 +110,7 @@ export function VoiceCopilotPanel({
             <button
               className="assistant-button assistant-button-primary"
               onClick={onConnect}
-              disabled={isWorking || !isPrepared || sessionActive}
+              disabled={isWorking || sessionActive}
             >
               Start Session
             </button>
@@ -121,8 +123,15 @@ export function VoiceCopilotPanel({
             </button>
             <button
               className="assistant-button"
-              onClick={onDisconnect}
+              onClick={onPause}
               disabled={!sessionActive || isWorking}
+            >
+              Pause Session
+            </button>
+            <button
+              className="assistant-button assistant-button-danger"
+              onClick={onEndSession}
+              disabled={isWorking || (!sessionActive && connectionState !== "connected")}
             >
               End Session
             </button>

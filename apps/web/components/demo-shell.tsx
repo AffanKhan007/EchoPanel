@@ -64,6 +64,7 @@ export function DemoShell() {
   const preparePromiseRef = useRef<Promise<void> | null>(null);
   const prepareStartedRef = useRef(false);
   const transcriptCreatedAtRef = useRef<Record<string, number>>({});
+  const sessionActiveRef = useRef(false);
   const uiRef = useRef<UiSnapshot>({
     filters,
     contextLabel,
@@ -75,6 +76,10 @@ export function DemoShell() {
       contextLabel,
     };
   }, [filters, contextLabel]);
+
+  useEffect(() => {
+    sessionActiveRef.current = sessionActive;
+  }, [sessionActive]);
 
   useEffect(() => {
     if (!highlightedWidget) {
@@ -235,6 +240,23 @@ export function DemoShell() {
       return;
     }
     host.innerHTML = "";
+  }
+
+  function setRemoteAudioEnabled(enabled: boolean) {
+    const host = audioHostRef.current;
+    if (!host) {
+      return;
+    }
+
+    host.querySelectorAll("audio").forEach((node) => {
+      const element = node as HTMLAudioElement;
+      element.muted = !enabled;
+      if (enabled) {
+        void element.play().catch(() => undefined);
+      } else {
+        element.pause();
+      }
+    });
   }
 
   async function disconnectRoom() {
@@ -413,9 +435,12 @@ export function DemoShell() {
 
       const element = track.attach();
       element.autoplay = true;
+      element.muted = !sessionActiveRef.current;
       element.dataset.participant = participant.identity;
       audioHostRef.current?.appendChild(element);
-      void element.play().catch(() => undefined);
+      if (sessionActiveRef.current) {
+        void element.play().catch(() => undefined);
+      }
 
       if (!agentIdentityRef.current && participant.identity !== room.localParticipant.identity) {
         syncAgentParticipant(participant);
@@ -446,6 +471,8 @@ export function DemoShell() {
       "lk.transcription",
       async (reader: any, participantInfo: any) => {
         const participantIdentity = participantInfo.identity as string;
+        const isUserParticipant =
+          room.localParticipant.identity === participantIdentity;
         const segmentId =
           (reader.info?.attributes?.["lk.segment_id"] as string | undefined) ??
           (reader.info?.id as string | undefined) ??
@@ -456,9 +483,15 @@ export function DemoShell() {
         let text = "";
         for await (const chunk of reader) {
           text += String(chunk);
+          if (!sessionActiveRef.current && !isUserParticipant) {
+            continue;
+          }
           upsertTranscriptEntry(participantIdentity, segmentId, text, isFinalStream);
         }
 
+        if (!sessionActiveRef.current && !isUserParticipant) {
+          return;
+        }
         upsertTranscriptEntry(participantIdentity, segmentId, text, isFinalStream);
       },
     );
@@ -494,6 +527,7 @@ export function DemoShell() {
     setIsPrepared(true);
     setSessionActive(false);
     setIsMuted(true);
+    setRemoteAudioEnabled(false);
 
     const firstAgent = findLikelyAgent(room);
     if (firstAgent) {
@@ -535,6 +569,7 @@ export function DemoShell() {
       setTranscript([]);
 
       await room.startAudio();
+      setRemoteAudioEnabled(true);
       await room.localParticipant.setAttributes({
         "session.state": "active",
       });
@@ -548,7 +583,7 @@ export function DemoShell() {
     }
   }
 
-  async function handleDisconnect() {
+  async function handlePause() {
     setIsWorking(true);
     try {
       const room = roomRef.current;
@@ -561,9 +596,37 @@ export function DemoShell() {
         "session.state": "inactive",
       });
 
+      setRemoteAudioEnabled(false);
       setIsMuted(true);
       setSessionActive(false);
       setAgentState(agentIdentityRef.current ? "ready" : "waiting");
+    } finally {
+      setIsWorking(false);
+    }
+  }
+
+  async function handleEndSession() {
+    setIsWorking(true);
+    try {
+      const room = roomRef.current;
+      if (room) {
+        try {
+          await room.localParticipant.setMicrophoneEnabled(false, AUDIO_CAPTURE_OPTIONS);
+        } catch {
+          // Ignore mic shutdown errors during end-session cleanup.
+        }
+
+        try {
+          await room.localParticipant.setAttributes({
+            "session.state": "inactive",
+          });
+        } catch {
+          // Ignore attribute update errors during disconnect.
+        }
+      }
+
+      setRemoteAudioEnabled(false);
+      await disconnectRoom();
     } finally {
       setIsWorking(false);
     }
@@ -593,7 +656,8 @@ export function DemoShell() {
         sessionActive={sessionActive}
         uiStage={getUiStage()}
         onConnect={handleConnect}
-        onDisconnect={handleDisconnect}
+        onPause={handlePause}
+        onEndSession={handleEndSession}
         onToggleMute={handleToggleMute}
         transcript={transcript}
       />

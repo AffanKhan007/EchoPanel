@@ -8,6 +8,7 @@ from livekit.agents import (
     AgentServer,
     AgentSession,
     AutoSubscribe,
+    EndpointingOptions,
     JobContext,
     JobProcess,
     RunContext,
@@ -28,7 +29,10 @@ load_dotenv()
 AGENT_NAME = "echo-browser-copilot"
 VOICE_ID = "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc"
 
-server = AgentServer()
+server = AgentServer(
+    load_threshold=0.95,
+    num_idle_processes=1,
+)
 
 
 def prewarm(proc: JobProcess) -> None:
@@ -132,12 +136,25 @@ async def entrypoint(ctx: JobContext) -> None:
         tts=inference.TTS(
             model="cartesia/sonic-3",
             voice=VOICE_ID,
+            extra_kwargs={
+                "add_timestamps": False,
+                "add_phoneme_timestamps": False,
+                "max_buffer_delay_ms": 40,
+            },
         ),
-        preemptive_generation=True,
         turn_handling=TurnHandlingOptions(
-            turn_detection="stt",
-            min_endpointing_delay=0.2,
-            max_endpointing_delay=1.2,
+            turn_detection="vad",
+            endpointing=EndpointingOptions(
+                mode="fixed",
+                min_delay=0.1,
+                max_delay=0.28,
+            ),
+            preemptive_generation={
+                "enabled": True,
+                "preemptive_tts": True,
+                "max_speech_duration": 6.0,
+                "max_retries": 1,
+            },
         ),
         max_tool_steps=4,
     )
