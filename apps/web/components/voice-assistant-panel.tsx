@@ -148,6 +148,9 @@ export function VoiceAssistantPanel({
             <label className="assistant-text-label" htmlFor="assistant-text-question">
               Type a question
             </label>
+            <p className="assistant-text-note">
+              Typed questions are usually faster because they skip speech-to-text.
+            </p>
             <div className="assistant-text-row">
               <input
                 id="assistant-text-question"

@@ -1,35 +1,67 @@
-# EchoPanel Voice Agent Demo
+# EchoPanel
 
-Browser-based real-time voice assistant built with Next.js on the frontend and a Python LiveKit agent on the backend. The browser joins a LiveKit room, streams microphone audio, receives spoken responses from the assistant, and shows a synchronized live transcript for both sides.
+EchoPanel is a real-time browser voice assistant built with Next.js, Python, and LiveKit Cloud. It supports both voice and typed questions, streams live transcript for the user and assistant, supports interruption/barge-in, and can run either with a local Python agent or a deployed LiveKit Cloud agent.
 
-## What this demo does
+## Highlights
 
-- Connects a browser client to LiveKit Cloud with a server-generated token.
-- Dispatches one Python voice agent into the same room.
-- Uses LiveKit Inference for:
-  - `openai/gpt-5-nano`
-  - Deepgram Flux STT with `flux-general-en`
-  - Cartesia Sonic 3 TTS with voice `9626c31c-bec5-4cca-baa8-f8ba9e84c8bc`
-- Uses Silero VAD for turn-taking and interruptions.
-- Keeps the interaction voice-first and general-purpose.
-- Shows live transcript for both user and assistant speech.
+- Real-time voice assistant in the browser
+- Voice input and typed input in the same session
+- Live transcript for both user and assistant
+- Interruption handling with latest-question priority
+- LiveKit Cloud token generation from a secure server route
+- Python LiveKit agent using LiveKit Inference
+- Optional cloud deployment for more stable latency than local laptop runtime
 
-## Project structure
+## Tech Stack
+
+- Frontend: Next.js App Router + TypeScript
+- Backend: Python + LiveKit Agents SDK
+- Transport: LiveKit Cloud
+- STT: AssemblyAI via LiveKit Inference
+- LLM: OpenAI via LiveKit Inference
+- TTS: Cartesia Sonic 3 via LiveKit Inference
+
+## Current Voice Pipeline
+
+Voice question:
+
+`speech -> STT -> LLM -> TTS -> spoken answer`
+
+Typed question:
+
+`text -> LLM -> TTS -> spoken answer`
+
+Typed questions are usually faster because they skip speech-to-text and end-of-turn detection.
+
+## Project Structure
 
 ```text
-project-root/
+EchoPanel/
   apps/
-    web/
-      app/
-        api/livekit-token/
-      components/
-      lib/
-      package.json
     agent/
       src/
         agent.py
         prompts.py
+      .env
+      .dockerignore
+      Dockerfile
       requirements.txt
+    web/
+      app/
+        api/livekit-token/
+        globals.css
+        layout.tsx
+        page.tsx
+      components/
+        assistant-shell.tsx
+        voice-assistant-panel.tsx
+      lib/
+        livekit.ts
+        types.ts
+      .env.local
+      next.config.ts
+      package.json
+      tsconfig.json
   .env.example
   README.md
 ```
@@ -37,20 +69,15 @@ project-root/
 ## Requirements
 
 - Node.js 20+
-- npm 10+ or another package manager that can install from `package.json`
-- Python 3.11 or 3.12 recommended
-- A LiveKit Cloud project with:
-  - project URL
-  - API key
-  - API secret
+- npm 10+
+- Python 3.12 recommended
+- A LiveKit Cloud project
 
-## Environment setup
+## Environment Variables
 
-Create local env files and keep the real credentials there only.
+Use local env files only. Do not commit real credentials.
 
-### Root reference
-
-The project expects these variables:
+### Frontend: `apps/web/.env.local`
 
 ```bash
 LIVEKIT_URL=wss://your-project.livekit.cloud
@@ -59,20 +86,7 @@ LIVEKIT_API_KEY=your_livekit_api_key
 LIVEKIT_API_SECRET=your_livekit_api_secret
 ```
 
-### Frontend env
-
-Create `apps/web/.env.local`:
-
-```bash
-LIVEKIT_URL=wss://your-project.livekit.cloud
-NEXT_PUBLIC_LIVEKIT_URL=wss://your-project.livekit.cloud
-LIVEKIT_API_KEY=your_livekit_api_key
-LIVEKIT_API_SECRET=your_livekit_api_secret
-```
-
-### Agent env
-
-Create `apps/agent/.env`:
+### Agent: `apps/agent/.env`
 
 ```bash
 LIVEKIT_URL=wss://your-project.livekit.cloud
@@ -80,92 +94,144 @@ LIVEKIT_API_KEY=your_livekit_api_key
 LIVEKIT_API_SECRET=your_livekit_api_secret
 ```
 
-## Install steps
+### Example placeholders
 
-### Web app
+See [.env.example](C:/Users/affan.khan/Desktop/EchoPanel/.env.example).
 
-```bash
-cd apps/web
+## Install
+
+### Frontend
+
+```powershell
+cd C:\Users\affan.khan\Desktop\EchoPanel\apps\web
 npm install
 ```
 
-### Python agent
+### Agent
 
-```bash
-cd apps/agent
+```powershell
+cd C:\Users\affan.khan\Desktop\EchoPanel\apps\agent
 python -m venv .venv312
-.venv312\Scripts\activate
+.\.venv312\Scripts\Activate.ps1
 pip install -r requirements.txt
 python src/agent.py download-files
 ```
 
-`download-files` pulls the Silero VAD model weights once before the first run.
+## Run Modes
 
-## How to run the web app
+### 1. Cloud Agent Mode
 
-```bash
-cd apps/web
+Use this when the backend agent is already deployed to LiveKit Cloud.
+
+Run only the frontend:
+
+```powershell
+cd C:\Users\affan.khan\Desktop\EchoPanel\apps\web
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## How to run the agent
+In this mode:
+- frontend runs locally
+- agent runs on LiveKit Cloud
+- no local Python agent process is needed
 
-In a second terminal:
+### 2. Local Agent Mode
 
-```bash
-cd apps/agent
-.venv312\Scripts\activate
+Use this for faster backend development/testing before redeploying.
+
+Frontend:
+
+```powershell
+cd C:\Users\affan.khan\Desktop\EchoPanel\apps\web
+npm run dev
+```
+
+Agent:
+
+```powershell
+cd C:\Users\affan.khan\Desktop\EchoPanel\apps\agent
+.\.venv312\Scripts\Activate.ps1
 python src/agent.py start
 ```
 
-The agent registers under the explicit dispatch name `echo-browser-copilot`.
+In this mode:
+- frontend runs locally
+- agent runs locally from `.venv312`
 
-## How the token endpoint works
+## Cloud Deployment
 
-The Next.js API route at `apps/web/app/api/livekit-token/route.ts`:
+The agent can be deployed to LiveKit Cloud so it runs on LiveKit infrastructure instead of your laptop.
 
-1. Reads `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` from server-side env vars.
-2. Creates a room-scoped participant token for the browser.
-3. Adds an explicit room agent dispatch entry for `echo-browser-copilot`.
-4. Returns:
-   - `token`
-   - `wsUrl`
-   - `roomName`
-   - `participantIdentity`
-   - `agentName`
+### Create the cloud agent
 
-The browser uses `NEXT_PUBLIC_LIVEKIT_URL` or the returned `wsUrl` to connect. The API secret never goes to the browser.
+Run from [apps/agent](C:/Users/affan.khan/Desktop/EchoPanel/apps/agent):
 
-## How the frontend connects to the agent
+```powershell
+Remove-Item Env:ALL_PROXY,Env:GIT_HTTPS_PROXY,Env:GIT_HTTP_PROXY,Env:HTTPS_PROXY,Env:HTTP_PROXY -ErrorAction SilentlyContinue
+& "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\LiveKit.LiveKitCLI_Microsoft.Winget.Source_8wekyb3d8bbwe\lk.exe" agent create --silent --region eu-central .
+```
 
-1. User clicks `Start Session`.
-2. The web app calls `/api/livekit-token`.
-3. The browser connects to LiveKit with the returned token.
-4. The browser publishes the microphone track.
-5. LiveKit dispatches the Python agent into the same room.
-6. The frontend renders:
-   - connection state
-   - agent state from `lk.agent.state`
-   - synchronized transcriptions
-   - session controls
+### Deploy backend changes to the cloud agent
 
-## Manual LiveKit Cloud setup steps
+```powershell
+Remove-Item Env:ALL_PROXY,Env:GIT_HTTPS_PROXY,Env:GIT_HTTP_PROXY,Env:HTTPS_PROXY,Env:HTTP_PROXY -ErrorAction SilentlyContinue
+& "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\LiveKit.LiveKitCLI_Microsoft.Winget.Source_8wekyb3d8bbwe\lk.exe" agent deploy .
+```
 
-1. Create or open a LiveKit Cloud project.
-2. Copy the project WebSocket URL into:
-   - `LIVEKIT_URL`
-   - `NEXT_PUBLIC_LIVEKIT_URL`
-3. Copy the project API key and API secret into your local env files.
-4. Start the local Python agent with those credentials.
-5. Start the local Next.js app.
-6. Allow microphone access in the browser.
+### Check deployment status
 
-No extra OpenAI, Deepgram, or Cartesia keys are required here because the agent uses LiveKit Inference.
+```powershell
+Remove-Item Env:ALL_PROXY,Env:GIT_HTTPS_PROXY,Env:GIT_HTTP_PROXY,Env:HTTPS_PROXY,Env:HTTP_PROXY -ErrorAction SilentlyContinue
+& "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\LiveKit.LiveKitCLI_Microsoft.Winget.Source_8wekyb3d8bbwe\lk.exe" agent status .
+```
+
+### View runtime logs
+
+```powershell
+Remove-Item Env:ALL_PROXY,Env:GIT_HTTPS_PROXY,Env:GIT_HTTP_PROXY,Env:HTTPS_PROXY,Env:HTTP_PROXY -ErrorAction SilentlyContinue
+& "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\LiveKit.LiveKitCLI_Microsoft.Winget.Source_8wekyb3d8bbwe\lk.exe" agent logs .
+```
+
+### View build logs
+
+```powershell
+Remove-Item Env:ALL_PROXY,Env:GIT_HTTPS_PROXY,Env:GIT_HTTP_PROXY,Env:HTTPS_PROXY,Env:HTTP_PROXY -ErrorAction SilentlyContinue
+& "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\LiveKit.LiveKitCLI_Microsoft.Winget.Source_8wekyb3d8bbwe\lk.exe" agent logs --log-type=build .
+```
+
+## How It Works
+
+1. The user opens the frontend and starts a session.
+2. The frontend calls `/api/livekit-token`.
+3. The server generates a LiveKit token.
+4. The browser joins the room.
+5. The LiveKit agent joins the same room.
+6. The user can speak or type.
+7. The assistant responds with spoken output and live transcript.
+
+## Notable Behavior
+
+- The assistant greets first.
+- The latest user question is prioritized when interruptions happen.
+- Typed questions usually respond faster than spoken questions.
+- The deployed cloud agent usually performs better than the local laptop agent for latency consistency.
+
+## Demo Ideas
+
+Try these:
+
+- `How do APIs work?`
+- `Tell me a short joke.`
+- `What can you help me with?`
+- Type a question and compare how fast it feels versus voice.
+- Ask a question, then quickly rephrase it before the assistant answers.
+
+For a presentation walkthrough, see [DEMO_SCRIPT.md](C:/Users/affan.khan/Desktop/EchoPanel/DEMO_SCRIPT.md).
 
 ## Notes
 
-- This repo intentionally does not hardcode real credentials in source control.
-- The current structure is intentionally simple: one frontend app and one backend agent.
-- The assistant is a general voice assistant now, not a tool-using app copilot.
+- This project uses LiveKit Inference, so no separate OpenAI, AssemblyAI, or Cartesia API keys are required for the current setup.
+- The local Python virtual environment is for development/testing only. The cloud deployment does not use your local `.venv312`.
+- Browser extensions like Grammarly can inject DOM attributes and cause harmless hydration warnings in development.

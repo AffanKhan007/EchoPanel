@@ -24,11 +24,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${displayFont.variable} ${monoFont.variable}`}>
+    <html lang="en" suppressHydrationWarning>
+      <body
+        className={`${displayFont.variable} ${monoFont.variable}`}
+        suppressHydrationWarning
+      >
         {children}
       </body>
     </html>
   );
 }
-

@@ -28,6 +28,7 @@ load_dotenv()
 
 AGENT_NAME = "echo-browser-copilot"
 VOICE_ID = "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc"
+GREETING_TEXT = "Hello, how can I help you today?"
 latency_logger = logging.getLogger("echo.latency")
 
 server = AgentServer(
@@ -97,11 +98,11 @@ async def entrypoint(ctx: JobContext) -> None:
             language="en",
             extra_kwargs={
                 "min_turn_silence": 100,
-                "max_turn_silence": 1000,
+                "max_turn_silence": 700,
                 "vad_threshold": 0.3,
             },
         ),
-        llm=inference.LLM(model="openai/gpt-5-nano"),
+        llm=inference.LLM(model="openai/gpt-4.1-nano"),
         tts=inference.TTS(
             model="cartesia/sonic-3",
             voice=VOICE_ID,
@@ -118,8 +119,11 @@ async def entrypoint(ctx: JobContext) -> None:
                 min_delay=0.0,
                 max_delay=0.1,
             ),
+            interruption={
+                "mode": "adaptive",
+            },
             preemptive_generation={
-                "enabled": False,
+                "enabled": True,
                 "preemptive_tts": True,
                 "max_speech_duration": 6.0,
                 "max_retries": 1,
@@ -231,7 +235,7 @@ async def entrypoint(ctx: JobContext) -> None:
 
     if last_active:
         await session.say(
-            "Hello, how can I help you today?",
+            GREETING_TEXT,
             allow_interruptions=True,
         )
 
@@ -241,7 +245,7 @@ async def entrypoint(ctx: JobContext) -> None:
 
         if is_active and not last_active:
             await session.say(
-                "Hello, how can I help you today?",
+                GREETING_TEXT,
                 allow_interruptions=True,
             )
 

@@ -243,6 +243,13 @@ p {
   text-transform: uppercase;
 }
 
+.assistant-text-note {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
 .assistant-text-row {
   display: flex;
   gap: 10px;
