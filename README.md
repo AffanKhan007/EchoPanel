@@ -64,6 +64,21 @@ If you want an animated demo, place it at `assets/demo.gif`.
 
 ## Architecture
 
+### System diagram
+
+```mermaid
+flowchart LR
+    U["User"] --> W["EchoPanel Web UI<br/>Next.js + React"]
+    W --> T["/api/livekit-token<br/>Next.js server route"]
+    T --> L["LiveKit Cloud"]
+    L --> A["EchoPanel Agent<br/>Python + LiveKit Agents"]
+    A --> I["Voice Inference Path<br/>STT -> LLM -> TTS"]
+    A --> R["External RAG Backend"]
+    A --> X["WeatherAPI"]
+    R --> D["Uploaded Documents / Index"]
+    A --> W
+```
+
 ### Voice flow
 
 `Speech -> LiveKit -> Agent -> STT/LLM/TTS -> Spoken response + transcript`
@@ -75,6 +90,19 @@ If you want an animated demo, place it at `assets/demo.gif`.
 ### Ask Docs flow
 
 `Upload file -> frontend RAG proxy -> external RAG backend -> indexed documents -> Ask Docs query -> grounded answer`
+
+### Mode routing diagram
+
+```mermaid
+flowchart TD
+    Q["User Question"] --> M{"Selected Mode"}
+    M -->|General| G["General LLM path"]
+    M -->|Ask Docs| R["RAG /ask-docs path"]
+    M -->|Auto| AR{"Router Decision"}
+    AR -->|general| G
+    AR -->|rag| R
+    AR -->|weather| W["Weather API path"]
+```
 
 ## Installation
 
