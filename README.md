@@ -13,15 +13,10 @@ EchoPanel is a real-time AI voice assistant dashboard built around LiveKit. It c
 
 ## Project Preview
 
-Place your screenshot at `assets/project-preview.png`.
 
 ![Project Preview](assets/project-preview.png)
 
-## Demo GIF
 
-If you want an animated demo, place it at `assets/demo.gif`.
-
-![Demo GIF](assets/demo.gif)
 
 ## Features
 
