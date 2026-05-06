@@ -1,113 +1,117 @@
 # EchoPanel
 
-EchoPanel is a real-time browser voice assistant built with Next.js, Python, and LiveKit Cloud. It supports both voice and typed questions, streams live transcript for the user and assistant, supports interruption/barge-in, and can run either with a local Python agent or a deployed LiveKit Cloud agent.
+[![Status](https://img.shields.io/badge/status-active%20development-2563eb)](https://github.com/)
+[![Frontend](https://img.shields.io/badge/frontend-Next.js%2015%20%2B%20React%2019-111827)](https://nextjs.org/)
+[![Backend](https://img.shields.io/badge/backend-Python%20%2B%20LiveKit%20Agents-0f172a)](https://docs.livekit.io/agents/)
+[![LiveKit](https://img.shields.io/badge/voice-LiveKit%20Cloud-0ea5e9)](https://livekit.io/)
+[![RAG](https://img.shields.io/badge/RAG-external%20document%20service-7c3aed)](#api--service-integrations)
+[![TypeScript](https://img.shields.io/badge/made%20with-TypeScript-3178c6)](https://www.typescriptlang.org/)
+[![Python](https://img.shields.io/badge/made%20with-Python-3776ab)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-not%20specified-64748b)](#license)
 
-## Highlights
+EchoPanel is a real-time AI voice assistant dashboard built around LiveKit. It combines browser-based voice interaction, live transcript streaming, typed fallback input, optional document-grounded Q&A through an external RAG backend, weather/tool routing, and a modern desktop-first control panel for demos and rapid testing.
 
-- Real-time voice assistant in the browser
-- Voice input and typed input in the same session
-- Live transcript for both user and assistant
-- Interruption handling with latest-question priority
-- LiveKit Cloud token generation from a secure server route
-- Python LiveKit agent using LiveKit Inference
-- Optional cloud deployment for more stable latency than local laptop runtime
+## Project Preview
+
+Place your screenshot at `assets/project-preview.png`.
+
+![Project Preview](assets/project-preview.png)
+
+## Demo GIF
+
+If you want an animated demo, place it at `assets/demo.gif`.
+
+![Demo GIF](assets/demo.gif)
+
+## Features
+
+- Real-time AI voice assistant powered by LiveKit
+- Live transcript for both the user and assistant
+- Start, pause, mute/unmute, and end session controls
+- Typed question support alongside voice interaction
+- `Ask Docs` mode for document-grounded Q&A
+- Document upload flow through the frontend
+- `Auto` mode with route selection for general chat, RAG, and weather
+- Weather API integration for location-based questions
+- Desktop-first dark dashboard UI with transcript and controls visible above the fold
 
 ## Tech Stack
 
-- Frontend: Next.js App Router + TypeScript
-- Backend: Python + LiveKit Agents SDK
-- Transport: LiveKit Cloud
-- STT: AssemblyAI via LiveKit Inference
-- LLM: OpenAI via LiveKit Inference
-- TTS: Cartesia Sonic 3 via LiveKit Inference
+### Frontend
 
-## Current Voice Pipeline
+- Next.js 15
+- React 19
+- TypeScript
+- Custom CSS in `apps/web/app/globals.css`
+- LiveKit client SDK
 
-Voice question:
+### Backend / Agent
 
-`speech -> STT -> LLM -> TTS -> spoken answer`
+- Python 3.12
+- LiveKit Agents SDK
+- `python-dotenv`
+- Silero VAD / LiveKit agent plugins
 
-Typed question:
+### Voice / Inference
 
-`text -> LLM -> TTS -> spoken answer`
+- LiveKit Cloud
+- Speech-to-text, LLM, and TTS routed through the LiveKit agent pipeline
 
-Typed questions are usually faster because they skip speech-to-text and end-of-turn detection.
+### External Services
 
-## Project Structure
+- Optional external RAG/document service
+- Optional WeatherAPI integration
 
-```text
-EchoPanel/
-  apps/
-    agent/
-      src/
-        agent.py
-        prompts.py
-      .env
-      .dockerignore
-      Dockerfile
-      requirements.txt
-    web/
-      app/
-        api/livekit-token/
-        globals.css
-        layout.tsx
-        page.tsx
-      components/
-        assistant-shell.tsx
-        voice-assistant-panel.tsx
-      lib/
-        livekit.ts
-        types.ts
-      .env.local
-      next.config.ts
-      package.json
-      tsconfig.json
-  .env.example
-  README.md
-```
+## Architecture
 
-## Requirements
+### Voice flow
+
+`Speech -> LiveKit -> Agent -> STT/LLM/TTS -> Spoken response + transcript`
+
+### Typed flow
+
+`Typed input -> Agent -> LLM or routed tool path -> Spoken response + transcript`
+
+### Ask Docs flow
+
+`Upload file -> frontend RAG proxy -> external RAG backend -> indexed documents -> Ask Docs query -> grounded answer`
+
+## Installation
+
+### Prerequisites
 
 - Node.js 20+
 - npm 10+
 - Python 3.12 recommended
 - A LiveKit Cloud project
+- Optional external RAG backend if you want document Q&A
+- Optional WeatherAPI key if you want weather routing
 
-## Environment Variables
-
-Use local env files only. Do not commit real credentials.
-
-### Frontend: `apps/web/.env.local`
+### 1. Clone the repository
 
 ```bash
-LIVEKIT_URL=wss://your-project.livekit.cloud
-NEXT_PUBLIC_LIVEKIT_URL=wss://your-project.livekit.cloud
-LIVEKIT_API_KEY=your_livekit_api_key
-LIVEKIT_API_SECRET=your_livekit_api_secret
+git clone <your-repo-url>
+cd EchoPanel
 ```
 
-### Agent: `apps/agent/.env`
+### 2. Configure environment variables
 
-```bash
-LIVEKIT_URL=wss://your-project.livekit.cloud
-LIVEKIT_API_KEY=your_livekit_api_key
-LIVEKIT_API_SECRET=your_livekit_api_secret
-```
+Create local env files from the placeholders:
 
-### Example placeholders
+- Root reference: `.env.example`
+- Frontend env: `apps/web/.env.local`
+- Agent env: `apps/agent/.env`
 
-See [.env.example](C:/Users/affan.khan/Desktop/EchoPanel/.env.example).
+Do not commit real `.env` files or secrets.
 
-## Install
-
-### Frontend
+### 3. Install frontend dependencies
 
 ```powershell
 cd C:\Users\affan.khan\Desktop\EchoPanel\apps\web
 npm install
 ```
 
-### Agent
+### 4. Install agent dependencies
 
 ```powershell
 cd C:\Users\affan.khan\Desktop\EchoPanel\apps\agent
@@ -117,13 +121,7 @@ pip install -r requirements.txt
 python src/agent.py download-files
 ```
 
-## Run Modes
-
-### 1. Cloud Agent Mode
-
-Use this when the backend agent is already deployed to LiveKit Cloud.
-
-Run only the frontend:
+### 5. Run the frontend
 
 ```powershell
 cd C:\Users\affan.khan\Desktop\EchoPanel\apps\web
@@ -132,23 +130,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-In this mode:
-- frontend runs locally
-- agent runs on LiveKit Cloud
-- no local Python agent process is needed
-
-### 2. Local Agent Mode
-
-Use this for faster backend development/testing before redeploying.
-
-Frontend:
-
-```powershell
-cd C:\Users\affan.khan\Desktop\EchoPanel\apps\web
-npm run dev
-```
-
-Agent:
+### 6. Run the agent locally (optional)
 
 ```powershell
 cd C:\Users\affan.khan\Desktop\EchoPanel\apps\agent
@@ -156,82 +138,150 @@ cd C:\Users\affan.khan\Desktop\EchoPanel\apps\agent
 python src/agent.py start
 ```
 
-In this mode:
-- frontend runs locally
-- agent runs locally from `.venv312`
+If you are using a deployed LiveKit Cloud agent instead, you only need the frontend running locally.
 
-## Cloud Deployment
+## Environment Variables
 
-The agent can be deployed to LiveKit Cloud so it runs on LiveKit infrastructure instead of your laptop.
+Use placeholder values only in committed files. Keep real credentials local.
 
-### Create the cloud agent
+Reference from [.env.example](C:/Users/affan.khan/Desktop/EchoPanel/.env.example):
 
-Run from [apps/agent](C:/Users/affan.khan/Desktop/EchoPanel/apps/agent):
-
-```powershell
-Remove-Item Env:ALL_PROXY,Env:GIT_HTTPS_PROXY,Env:GIT_HTTP_PROXY,Env:HTTPS_PROXY,Env:HTTP_PROXY -ErrorAction SilentlyContinue
-& "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\LiveKit.LiveKitCLI_Microsoft.Winget.Source_8wekyb3d8bbwe\lk.exe" agent create --silent --region eu-central .
+```ini
+LIVEKIT_URL=wss://your-project.livekit.cloud
+NEXT_PUBLIC_LIVEKIT_URL=wss://your-project.livekit.cloud
+LIVEKIT_API_KEY=your_livekit_api_key
+LIVEKIT_API_SECRET=your_livekit_api_secret
+RAG_API_URL=https://your-rag-service.example.com
+RAG_API_KEY=your_rag_api_key
+WEATHER_API_KEY=your_weatherapi_key
+WEATHER_API_BASE_URL=https://api.weatherapi.com/v1
 ```
 
-### Deploy backend changes to the cloud agent
+### Recommended placement
 
-```powershell
-Remove-Item Env:ALL_PROXY,Env:GIT_HTTPS_PROXY,Env:GIT_HTTP_PROXY,Env:HTTPS_PROXY,Env:HTTP_PROXY -ErrorAction SilentlyContinue
-& "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\LiveKit.LiveKitCLI_Microsoft.Winget.Source_8wekyb3d8bbwe\lk.exe" agent deploy .
+| Variable | Used by | Notes |
+| --- | --- | --- |
+| `LIVEKIT_URL` | frontend server route + agent | LiveKit Cloud URL |
+| `NEXT_PUBLIC_LIVEKIT_URL` | frontend client | Client WebSocket URL |
+| `LIVEKIT_API_KEY` | frontend server route + agent | LiveKit API key |
+| `LIVEKIT_API_SECRET` | frontend server route + agent | LiveKit API secret |
+| `RAG_API_URL` | frontend RAG proxy + agent | External document service base URL |
+| `RAG_API_KEY` | frontend RAG proxy + agent | Shared API key for the RAG service |
+| `WEATHER_API_KEY` | agent | Used for weather questions in `Auto` mode |
+| `WEATHER_API_BASE_URL` | agent | Optional override, defaults to WeatherAPI |
+
+## Usage
+
+### Frontend only with cloud agent
+
+1. Start the web app with `npm run dev`.
+2. Open [http://localhost:3000](http://localhost:3000).
+3. Click `Start Session`.
+4. Speak or type a question.
+5. Watch the live transcript update in the right panel.
+
+### Local development with local agent
+
+1. Start the frontend.
+2. Start the Python agent locally.
+3. Open the app and begin a session.
+4. Test voice, typed questions, and transcript behavior.
+
+### Document Q&A
+
+1. Switch to `Ask Docs`.
+2. Upload a supported file.
+3. Wait until the document service reports readiness.
+4. Ask a grounded question about the uploaded content.
+
+### Auto mode
+
+1. Switch to `Auto`.
+2. Ask:
+   - a general question for the normal LLM path
+   - a document question for the RAG path
+   - a weather question for the weather service
+
+## Folder Structure
+
+```text
+EchoPanel/
+├─ apps/
+│  ├─ agent/
+│  │  ├─ src/
+│  │  │  ├─ agent.py
+│  │  │  └─ prompts.py
+│  │  ├─ Dockerfile
+│  │  ├─ livekit.toml
+│  │  └─ requirements.txt
+│  └─ web/
+│     ├─ app/
+│     │  ├─ api/
+│     │  ├─ globals.css
+│     │  └─ page.tsx
+│     ├─ components/
+│     │  ├─ assistant-shell.tsx
+│     │  └─ voice-assistant-panel.tsx
+│     ├─ lib/
+│     └─ package.json
+├─ assets/
+├─ .env.example
+└─ README.md
 ```
 
-### Check deployment status
+## API & Service Integrations
 
-```powershell
-Remove-Item Env:ALL_PROXY,Env:GIT_HTTPS_PROXY,Env:GIT_HTTP_PROXY,Env:HTTPS_PROXY,Env:HTTP_PROXY -ErrorAction SilentlyContinue
-& "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\LiveKit.LiveKitCLI_Microsoft.Winget.Source_8wekyb3d8bbwe\lk.exe" agent status .
+### Frontend API routes in this repository
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/livekit-token` | Creates a room token and dispatches the LiveKit agent |
+| `GET` | `/api/rag/health` | Checks the external RAG service availability |
+| `POST` | `/api/rag/upload` | Uploads documents to the external RAG backend |
+
+### External services expected by the app
+
+#### RAG service
+
+Expected external endpoints used by EchoPanel:
+
+- `GET /health`
+- `POST /upload`
+- `POST /ask-docs`
+
+#### Weather service
+
+The agent uses WeatherAPI through `WEATHER_API_KEY` and `WEATHER_API_BASE_URL`.
+
+## Screenshots / GIF Instructions
+
+### To add a screenshot
+
+1. Create or use the `assets/` folder.
+2. Save your screenshot as `project-preview.png`.
+3. Put it inside `assets/`.
+4. Use:
+
+```md
+![Project Preview](assets/project-preview.png)
 ```
 
-### View runtime logs
+### To add a GIF
 
-```powershell
-Remove-Item Env:ALL_PROXY,Env:GIT_HTTPS_PROXY,Env:GIT_HTTP_PROXY,Env:HTTPS_PROXY,Env:HTTP_PROXY -ErrorAction SilentlyContinue
-& "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\LiveKit.LiveKitCLI_Microsoft.Winget.Source_8wekyb3d8bbwe\lk.exe" agent logs .
+1. Save the GIF as `demo.gif`.
+2. Put it inside `assets/`.
+3. Use:
+
+```md
+![Demo GIF](assets/demo.gif)
 ```
-
-### View build logs
-
-```powershell
-Remove-Item Env:ALL_PROXY,Env:GIT_HTTPS_PROXY,Env:GIT_HTTP_PROXY,Env:HTTPS_PROXY,Env:HTTP_PROXY -ErrorAction SilentlyContinue
-& "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\LiveKit.LiveKitCLI_Microsoft.Winget.Source_8wekyb3d8bbwe\lk.exe" agent logs --log-type=build .
-```
-
-## How It Works
-
-1. The user opens the frontend and starts a session.
-2. The frontend calls `/api/livekit-token`.
-3. The server generates a LiveKit token.
-4. The browser joins the room.
-5. The LiveKit agent joins the same room.
-6. The user can speak or type.
-7. The assistant responds with spoken output and live transcript.
-
-## Notable Behavior
-
-- The assistant greets first.
-- The latest user question is prioritized when interruptions happen.
-- Typed questions usually respond faster than spoken questions.
-- The deployed cloud agent usually performs better than the local laptop agent for latency consistency.
-
-## Demo Ideas
-
-Try these:
-
-- `How do APIs work?`
-- `Tell me a short joke.`
-- `What can you help me with?`
-- Type a question and compare how fast it feels versus voice.
-- Ask a question, then quickly rephrase it before the assistant answers.
-
-For a presentation walkthrough, see [DEMO_SCRIPT.md](C:/Users/affan.khan/Desktop/EchoPanel/DEMO_SCRIPT.md).
 
 ## Notes
 
-- This project uses LiveKit Inference, so no separate OpenAI, AssemblyAI, or Cartesia API keys are required for the current setup.
-- The local Python virtual environment is for development/testing only. The cloud deployment does not use your local `.venv312`.
-- Browser extensions like Grammarly can inject DOM attributes and cause harmless hydration warnings in development.
+- This repository contains the EchoPanel frontend and LiveKit agent, not the full RAG backend implementation.
+- The RAG backend is expected to run as a separate service and be reachable through `RAG_API_URL`.
+- The dashboard is optimized primarily for desktop and laptop usage.
+
+## License
+
+License not specified.

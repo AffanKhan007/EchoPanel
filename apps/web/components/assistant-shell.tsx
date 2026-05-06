@@ -11,7 +11,8 @@ import {
   type TrackPublication,
 } from "livekit-client";
 import { requestLiveKitToken } from "@/lib/livekit";
-import type { TranscriptEntry } from "@/lib/types";
+import { requestRagHealth, uploadRagDocuments } from "@/lib/rag";
+import type { AssistantMode, TranscriptEntry } from "@/lib/types";
 import { VoiceAssistantPanel } from "@/components/voice-assistant-panel";
 
 const AUDIO_CAPTURE_OPTIONS = {
@@ -34,14 +35,21 @@ function describeConnectionState(state: ConnectionState | string) {
 }
 
 export function AssistantShell() {
+  const [assistantMode, setAssistantMode] = useState<AssistantMode>("general");
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [connectionState, setConnectionState] = useState("disconnected");
   const [agentState, setAgentState] = useState("waiting");
   const [agentIdentity, setAgentIdentity] = useState<string | null>(null);
+  const [documentServiceReady, setDocumentServiceReady] = useState(false);
+  const [documentServiceError, setDocumentServiceError] = useState<string | null>(null);
+  const [documentUploadMessage, setDocumentUploadMessage] = useState<string | null>(null);
+  const [uploadedDocuments, setUploadedDocuments] = useState<string[]>([]);
+  const [uploadedDocumentIds, setUploadedDocumentIds] = useState<number[]>([]);
   const [isMuted, setIsMuted] = useState(true);
   const [isPrepared, setIsPrepared] = useState(false);
   const [isWorking, setIsWorking] = useState(false);
   const [isSubmittingText, setIsSubmittingText] = useState(false);
+  const [isUploadingDocuments, setIsUploadingDocuments] = useState(false);
   const [sessionActive, setSessionActive] = useState(false);
 
   const roomRef = useRef<Room | null>(null);
@@ -51,6 +59,7 @@ export function AssistantShell() {
   const prepareStartedRef = useRef(false);
   const transcriptCreatedAtRef = useRef<Record<string, number>>({});
   const sessionActiveRef = useRef(false);
+  const syncedAssistantModeRef = useRef<AssistantMode | null>(null);
 
   useEffect(() => {
     sessionActiveRef.current = sessionActive;
@@ -64,6 +73,37 @@ export function AssistantShell() {
     prepareStartedRef.current = true;
     void ensurePreparedRoom();
   }, []);
+
+  useEffect(() => {
+    if (assistantMode === "general") {
+      setDocumentServiceError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    void requestRagHealth()
+      .then(() => {
+        if (cancelled) {
+          return;
+        }
+        setDocumentServiceReady(true);
+        setDocumentServiceError(null);
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        setDocumentServiceReady(false);
+        setDocumentServiceError(
+          error instanceof Error ? error.message : "Unable to reach the document service.",
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [assistantMode]);
 
   function getUiStage() {
     if (!isPrepared) {
@@ -103,6 +143,41 @@ export function AssistantShell() {
     }
 
     return "Starting";
+  }
+
+  async function syncAssistantMode(mode: AssistantMode, force = false) {
+    const room = roomRef.current;
+    if (!room) {
+      return;
+    }
+
+    if (!force && syncedAssistantModeRef.current === mode) {
+      return;
+    }
+
+    try {
+      await room.localParticipant.setAttributes({
+        "assistant.mode": mode,
+      });
+      syncedAssistantModeRef.current = mode;
+    } catch {
+      // Ignore mode sync issues when the room is reconnecting or closing.
+    }
+  }
+
+  async function syncUploadedDocumentIds(documentIds: number[]) {
+    const room = roomRef.current;
+    if (!room) {
+      return;
+    }
+
+    try {
+      await room.localParticipant.setAttributes({
+        "assistant.document_ids": JSON.stringify(documentIds),
+      });
+    } catch {
+      // Ignore sync issues when the room is reconnecting or closing.
+    }
   }
 
   function upsertTranscriptEntry(
@@ -245,6 +320,7 @@ export function AssistantShell() {
     setIsPrepared(false);
     setSessionActive(false);
     setTranscript([]);
+    syncedAssistantModeRef.current = null;
   }
 
   function attachRoomHandlers(room: Room) {
@@ -378,8 +454,11 @@ export function AssistantShell() {
     );
 
     await room.localParticipant.setAttributes({
+      "assistant.mode": assistantMode,
+      "assistant.document_ids": JSON.stringify(uploadedDocumentIds),
       "session.state": "inactive",
     });
+    syncedAssistantModeRef.current = assistantMode;
 
     setConnectionState("connected");
     setIsPrepared(true);
@@ -428,6 +507,8 @@ export function AssistantShell() {
 
       await room.startAudio();
       setRemoteAudioEnabled(true);
+      await syncAssistantMode(assistantMode);
+      await syncUploadedDocumentIds(uploadedDocumentIds);
       await room.localParticipant.setAttributes({
         "session.state": "active",
       });
@@ -517,6 +598,8 @@ export function AssistantShell() {
     try {
       await room.startAudio();
       setRemoteAudioEnabled(true);
+      await syncAssistantMode(assistantMode);
+      await syncUploadedDocumentIds(uploadedDocumentIds);
       await room.localParticipant.sendText(trimmedQuestion, {
         topic: "lk.chat",
       });
@@ -526,22 +609,76 @@ export function AssistantShell() {
     }
   }
 
+  async function handleAssistantModeChange(mode: AssistantMode) {
+    setAssistantMode(mode);
+    setDocumentUploadMessage(null);
+    await syncAssistantMode(mode);
+  }
+
+  async function handleUploadDocuments(files: FileList | null) {
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    setIsUploadingDocuments(true);
+    setDocumentUploadMessage(null);
+
+    try {
+      const response = await uploadRagDocuments(Array.from(files));
+      if (response.documentIds.length === 0) {
+        setDocumentServiceReady(false);
+        setDocumentServiceError(
+          "Upload succeeded, but EchoPanel did not receive document IDs from the document service.",
+        );
+        setDocumentUploadMessage(null);
+        return;
+      }
+
+      setUploadedDocuments((current) => {
+        const next = new Set([...current, ...response.filenames]);
+        return Array.from(next);
+      });
+      setUploadedDocumentIds(response.documentIds);
+      await syncUploadedDocumentIds(response.documentIds);
+      setDocumentServiceReady(true);
+      setDocumentServiceError(null);
+      setDocumentUploadMessage(
+        response.message ?? `Uploaded ${response.filenames.join(", ")} successfully.`,
+      );
+    } catch (error) {
+      setDocumentServiceReady(false);
+      setDocumentServiceError(
+        error instanceof Error ? error.message : "Unable to upload documents.",
+      );
+    } finally {
+      setIsUploadingDocuments(false);
+    }
+  }
+
   return (
     <div className="assistant-page">
       <VoiceAssistantPanel
         agentIdentity={agentIdentity}
         agentState={agentState}
+        assistantMode={assistantMode}
         connectionState={connectionState}
+        documentServiceError={documentServiceError}
+        documentServiceReady={documentServiceReady}
+        documentUploadMessage={documentUploadMessage}
         isMuted={isMuted}
         isPrepared={isPrepared}
+        isUploadingDocuments={isUploadingDocuments}
         isWorking={isWorking}
         sessionActive={sessionActive}
         uiStage={getUiStage()}
+        uploadedDocuments={uploadedDocuments}
+        onAssistantModeChange={handleAssistantModeChange}
         onConnect={handleConnect}
         onPause={handlePause}
         onEndSession={handleEndSession}
         onToggleMute={handleToggleMute}
         onSubmitTextQuestion={handleSubmitTextQuestion}
+        onUploadDocuments={handleUploadDocuments}
         isSubmittingText={isSubmittingText}
         transcript={transcript}
       />
