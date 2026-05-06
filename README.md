@@ -73,6 +73,7 @@ flowchart LR
     R --> D["Uploaded Documents / Index"]
     A --> W
 ```
+```
 
 ### Voice flow
 
@@ -89,7 +90,7 @@ flowchart LR
 ### Mode routing diagram
 
 ```mermaid
-flowchart TD
+flowchart LR
     Q["User Question"] --> M{"Selected Mode"}
     M -->|General| G["General LLM path"]
     M -->|Ask Docs| R["RAG /ask-docs path"]
@@ -97,6 +98,7 @@ flowchart TD
     AR -->|general| G
     AR -->|rag| R
     AR -->|weather| W["Weather API path"]
+```
 ```
 
 ## Installation
@@ -162,6 +164,48 @@ python src/agent.py start
 ```
 
 If you are using a deployed LiveKit Cloud agent instead, you only need the frontend running locally.
+
+### 7. Deploy the agent to LiveKit Cloud (optional)
+
+Create the cloud agent from `apps/agent`:
+
+```powershell
+cd C:\Users\affan.khan\Desktop\EchoPanel\apps\agent
+Remove-Item Env:ALL_PROXY,Env:GIT_HTTPS_PROXY,Env:GIT_HTTP_PROXY,Env:HTTPS_PROXY,Env:HTTP_PROXY -ErrorAction SilentlyContinue
+& "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\LiveKit.LiveKitCLI_Microsoft.Winget.Source_8wekyb3d8bbwe\lk.exe" agent create --silent --region eu-central .
+```
+
+Deploy the latest agent changes:
+
+```powershell
+cd C:\Users\affan.khan\Desktop\EchoPanel\apps\agent
+Remove-Item Env:ALL_PROXY,Env:GIT_HTTPS_PROXY,Env:GIT_HTTP_PROXY,Env:HTTPS_PROXY,Env:HTTP_PROXY -ErrorAction SilentlyContinue
+& "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\LiveKit.LiveKitCLI_Microsoft.Winget.Source_8wekyb3d8bbwe\lk.exe" agent deploy .
+```
+
+Check deployment status:
+
+```powershell
+cd C:\Users\affan.khan\Desktop\EchoPanel\apps\agent
+Remove-Item Env:ALL_PROXY,Env:GIT_HTTPS_PROXY,Env:GIT_HTTP_PROXY,Env:HTTPS_PROXY,Env:HTTP_PROXY -ErrorAction SilentlyContinue
+& "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\LiveKit.LiveKitCLI_Microsoft.Winget.Source_8wekyb3d8bbwe\lk.exe" agent status .
+```
+
+View runtime logs:
+
+```powershell
+cd C:\Users\affan.khan\Desktop\EchoPanel\apps\agent
+Remove-Item Env:ALL_PROXY,Env:GIT_HTTPS_PROXY,Env:GIT_HTTP_PROXY,Env:HTTPS_PROXY,Env:HTTP_PROXY -ErrorAction SilentlyContinue
+& "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\LiveKit.LiveKitCLI_Microsoft.Winget.Source_8wekyb3d8bbwe\lk.exe" agent logs .
+```
+
+View build logs:
+
+```powershell
+cd C:\Users\affan.khan\Desktop\EchoPanel\apps\agent
+Remove-Item Env:ALL_PROXY,Env:GIT_HTTPS_PROXY,Env:GIT_HTTP_PROXY,Env:HTTPS_PROXY,Env:HTTP_PROXY -ErrorAction SilentlyContinue
+& "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\LiveKit.LiveKitCLI_Microsoft.Winget.Source_8wekyb3d8bbwe\lk.exe" agent logs --log-type=build .
+```
 
 ## Environment Variables
 
